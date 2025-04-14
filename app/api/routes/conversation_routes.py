@@ -6,6 +6,8 @@ from app.schemas.conversation import (
     PaginatedConversationResponse
 )
 
+import uuid
+
 router = APIRouter(prefix="/api/conversations", tags=["Conversations"])
 
 @router.get("/user/{user_id}", response_model=PaginatedConversationResponse)
@@ -26,7 +28,8 @@ async def get_user_conversations(
 
 @router.get("/{conversation_id}", response_model=ConversationResponse)
 async def get_conversation(
-    conversation_id: int = Path(..., description="ID of the conversation"),
+    # conversation_id: int = Path(..., description="ID of the conversation"),
+    conversation_id: uuid.UUID = Path(..., description="ID of the conversation"),
     conversation_controller: ConversationController = Depends()
 ) -> ConversationResponse:
     """

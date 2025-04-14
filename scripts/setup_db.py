@@ -44,6 +44,15 @@ def create_keyspace(session):
     # TODO: Students should implement keyspace creation
     # Hint: Consider replication strategy and factor for a distributed database
     
+    session.execute(f"""
+        CREATE KEYSPACE IF NOT EXISTS {CASSANDRA_KEYSPACE} 
+        WITH REPLICATION = {{ 'class': 'SimpleStrategy', 'replication_factor': 1 }}
+    """)
+    
+    session.set_keyspace(CASSANDRA_KEYSPACE)
+
+    
+    
     logger.info(f"Keyspace {CASSANDRA_KEYSPACE} is ready.")
 
 def create_tables(session):
@@ -60,6 +69,28 @@ def create_tables(session):
     # - What should be the primary keys and clustering columns?
     # - How will you handle pagination and time-based queries?
     
+    # CREATE TABLE IF NOT EXISTS messages_by_conversation 
+    session.execute("""CREATE TABLE IF NOT EXISTS messages_by_conversation (
+        conversation_id UUID,
+        message_timestamp TIMESTAMP,
+        message_id UUID,
+        sender_id INT,
+        recipient_id INT,
+        content TEXT,
+        PRIMARY KEY ((conversation_id), message_timestamp, message_id)) 
+        WITH CLUSTERING ORDER BY (message_timestamp DESC, message_id ASC);
+    """)
+    
+    session.execute("""CREATE TABLE IF NOT EXISTS user_conversations (
+        conversation_id UUID PRIMARY KEY,
+        list_of_users LIST<INT>,
+        last_message_content TEXT,
+        last_message_at TIMESTAMP,
+        created_at TIMESTAMP
+    );
+    """)
+    
+
     logger.info("Tables created successfully.")
 
 def main():

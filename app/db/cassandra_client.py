@@ -4,7 +4,8 @@ This provides a connection to the Cassandra database.
 """
 import os
 import uuid
-from typing import List, Dict, Any, Optional
+import time  
+from typing import List, Dict, Any, Optional, Sequence, Union
 from datetime import datetime
 import logging
 
@@ -41,15 +42,23 @@ class CassandraClient:
         self._initialized = True
     
     def connect(self) -> None:
-        """Connect to the Cassandra cluster."""
-        try:
-            self.cluster = Cluster([self.host])
-            self.session = self.cluster.connect(self.keyspace)
-            self.session.row_factory = dict_factory
-            logger.info(f"Connected to Cassandra at {self.host}:{self.port}, keyspace: {self.keyspace}")
-        except Exception as e:
-            logger.error(f"Failed to connect to Cassandra: {str(e)}")
-            raise
+        """Connect to the Cassandra cluster with retries."""
+        max_retries = 5
+        retry_delay = 5  # seconds
+        for attempt in range(max_retries):
+            try:
+                self.cluster = Cluster([self.host], port=self.port)
+                self.session = self.cluster.connect(self.keyspace)
+                self.session.row_factory = dict_factory
+                logger.info(f"Connected to Cassandra at {self.host}:{self.port}, keyspace: {self.keyspace}")
+                return
+            except Exception as e:
+                logger.warning(f"Failed to connect to Cassandra (attempt {attempt + 1}/{max_retries}): {str(e)}")
+                if attempt < max_retries - 1:
+                    time.sleep(retry_delay)
+        # If all retries fail
+        logger.error("Failed to connect to Cassandra after multiple attempts.")
+        raise RuntimeError("Could not connect to Cassandra")
     
     def close(self) -> None:
         """Close the Cassandra connection."""
@@ -57,29 +66,29 @@ class CassandraClient:
             self.cluster.shutdown()
             logger.info("Cassandra connection closed")
     
-    def execute(self, query: str, params: dict = None) -> List[Dict[str, Any]]:
-        """
-        Execute a CQL query.
-        
-        Args:
-            query: The CQL query string
-            params: The parameters for the query
+    def execute(self, query: str, params = None) -> List[Dict[str, Any]]:
+            """
+            Execute a CQL query.
             
-        Returns:
-            List of rows as dictionaries
-        """
-        if not self.session:
-            self.connect()
+            Args:
+                query: The CQL query string
+                params: The parameters for the query
+                
+            Returns:
+                List of rows as dictionaries
+            """
+            if not self.session:
+                self.connect()
+            
+            try:
+                statement = SimpleStatement(query)
+                result = self.session.execute(statement, params or {})
+                return list(result)
+            except Exception as e:
+                logger.error(f"Query execution failed: {str(e)}")
+                raise
         
-        try:
-            statement = SimpleStatement(query)
-            result = self.session.execute(statement, params or {})
-            return list(result)
-        except Exception as e:
-            logger.error(f"Query execution failed: {str(e)}")
-            raise
-    
-    def execute_async(self, query: str, params: dict = None):
+    def execute_async(self, query: str, params = None):
         """
         Execute a CQL query asynchronously.
         
@@ -99,7 +108,7 @@ class CassandraClient:
         except Exception as e:
             logger.error(f"Async query execution failed: {str(e)}")
             raise
-    
+        
     def get_session(self) -> Session:
         """Get the Cassandra session."""
         if not self.session:
