@@ -8,8 +8,23 @@ from typing import List, Dict, Any, Optional
 
 from app.db.cassandra_client import cassandra_client
 from app.schemas.message import MessageResponse
-from logging import logger
+import logging
 
+
+# Configure logger
+logger = logging.getLogger(__name__)
+logger.setLevel(logging.DEBUG)
+
+# Create console handler and set level to debug
+console_handler = logging.StreamHandler()
+console_handler.setLevel(logging.DEBUG)
+
+# Create formatter and add it to the handler
+formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+console_handler.setFormatter(formatter)
+
+# Add the handler to the logger
+logger.addHandler(console_handler)
 
 
 def paginate_messages(all_messages, page, limit):
@@ -24,28 +39,36 @@ def paginate_messages(all_messages, page, limit):
         Returns:
             List[Dict[str, Any]]: Paginated list of messages.
         """
+        
+        
         start = (page - 1) * limit
         end = start + limit
         start_index = (page - 1) * limit
         end_index = start_index + limit
         paginated_result = all_messages[start_index:end_index]
         messages = []
+        
+        logger.info("Here ---------")
         for row in paginated_result:
+            logger.info("Check pagi")
+            logger.info(row)
             messages.append(
                 MessageResponse(
-                    message_id=row.message_id,
-                    conversation_id=row.conversation_id,
-                    message_timestamp=row.message_timestamp,
-                    sender_id=row.sender_id,
-                    recipient_id=row.recipient_id,
-                    content=row.content
+                    id=row["message_id"],
+                    conversation_id=row["conversation_id"],
+                    created_at=row["message_timestamp"],
+                    sender_id=row["sender_id"],
+                    receiver_id=row["recipient_id"],
+                    content=row["content"]
                 )
             )
+            
+        logger.info("Done with pagi")
         return {
             "page": page,
             "limit": limit,
-            "total_messages": len(all_messages),
-            "messages": messages
+            "total": len(all_messages),
+            "data": messages
         }
 
 class MessageModel:
@@ -70,28 +93,30 @@ class MessageModel:
     # async def create_message(*args, **kwargs):
     async def create_message(
         conversation_id: uuid.UUID,
-        # message_id: uuid.UUID,
-        # message_tiestamp: datetime,
         sender_id: int,
         recipient_id: int,
         content: str):
+        
+        logger.info("Entered create_message method")
         """
         Create a new message.
         
         Students should decide what parameters are needed based on their schema design.
         """
         
-        message_timestamp = datetime.now()
+        message_timestamp = datetime.utcnow()
         message_id = uuid.uuid4()
+        
+        logger.debug(f"Creating message with ID: {message_id}")
         
         
         try:
             query = """
             insert into messages_by_conversation 
-            (conversation_id, message_id, message_timestamp, sender_id, recipient_id, content)
+            (conversation_id, message_timestamp, message_id, sender_id, recipient_id, content)
             VALUES (%s, %s, %s, %s, %s, %s)
             """
-            params = (conversation_id, message_id, message_timestamp, sender_id, recipient_id, content)
+            params = (conversation_id, message_timestamp, message_id, sender_id, recipient_id, content)
             cassandra_client.execute(query, params)
             
         except Exception as e:
@@ -113,18 +138,19 @@ class MessageModel:
             
         except Exception as e:
             # Handle exceptions (e.g., log them, raise custom exceptions, etc.)
-            logger.error("Error while inserting message: create_message")
+            # logger.error("Error while inserting message: create_message")
             raise e
         
         return {
-            "message_id": message_id,
-            "conversation_id": conversation_id,
-            "message_timestamp": message_timestamp,
+            "id": message_id,
             "sender_id": sender_id,
-            "recipient_id": recipient_id,
-            "content": content
+            "receiver_id": recipient_id,
+            "content": content,
+            "created_at": message_timestamp,
+            "conversation_id": conversation_id,
         }
-                    
+        
+       
         # This is a stub - students will implement the actual logic
         raise NotImplementedError("This method needs to be implemented")
     
@@ -141,6 +167,8 @@ class MessageModel:
         Students should decide what parameters are needed and how to implement pagination.
         """
         
+        logger.info("S1 - models - get_convo_message")
+        
         query = """
         SELECT * 
         FROM messages_by_conversation 
@@ -150,7 +178,15 @@ class MessageModel:
         params = (conversation_id,)
         messages = cassandra_client.execute(query, params)
         
-        return paginate_messages(messages, page, limit)
+        logger.info(messages)
+        
+        logger.info("S2 - models - get_convo_message")
+        
+        
+        res = paginate_messages(messages, page, limit)
+        
+        # return {"total": len(messages), "page": page, "limit": limit, "data": res}
+        return res
     
         
         # This is a stub - students will implement the actual logic
@@ -203,22 +239,30 @@ class ConversationModel:
         Students should decide what parameters are needed and how to implement pagination.
         """
         
-        query  = """
-        SELECT *
+        logger.info("S1 - get_user_c")
+        
+        query = """SELECT *
         FROM user_conversations
-        WHERE user_id = %s
-        """
+        WHERE list_of_users CONTAINS %s 
+        ALLOW FILTERING"""
+
         params = (user_id,)
         all_messages = cassandra_client.execute(query, params)
+        
+        logger.info("S2 - get_user_c")
+        
 
         all_messages.sort(key=lambda k: k.get("last_message_at") or datetime.min, reverse=True)
         
-        total = len(all_messages)
         start = (page - 1) * limit
         messages = all_messages[start:start + limit]
         
+        logger.info("S3 - get_user_c")
+        
+        
         conversations = []
         for row in messages:
+            logger.info(row)
             users = row.get("list_of_users", [])
             
             if len(users) >= 2:
@@ -229,21 +273,24 @@ class ConversationModel:
             else:
                 user1 = user2 = None
                 
+            
+
                 
             conversations.append({
-                "conversation_id": row.conversation_id,
+                "id": row["conversation_id"],
                 "user1_id": user1,
                 "user2_id": user2,
-                "last_message_at": row.last_message_at,
-                "last_message_content": row.get("last_message_content")
+                "last_message_at": row["last_message_at"],
+                "last_message_content": row["last_message_content"]
             })
     
+        logger.info("S4 - get_user_c")
         
         return {
-            "total": len(conversations),
+            "total": len(all_messages),
             "page": page,
             "limit": limit,
-            "conversations": conversations[start:start + limit]
+            "data": conversations[start:start + limit]
         }
         
         
@@ -278,9 +325,9 @@ class ConversationModel:
         else:
             user1 = user2 = None
             
-        
+        logger.info("S1 - get_c")
         return {
-            "conversation_id": conversation.conversation_id,
+            "id": conversation.get("conversation_id"),
             "user1_id": user1,
             "user2_id": user2,
             "last_message_at": conversation.get("last_message_at"),
@@ -301,19 +348,32 @@ class ConversationModel:
         Students should decide how to handle this operation efficiently.
         """
         
+        logger.info("S1 - Entered create_or_get_conversation method")
+        
         # Check if a conversation already exists between the two users
         query = """
         SELECT * 
-        FROM conversations 
+        FROM user_conversations 
         WHERE list_of_users CONTAINS %s 
         ALLOW FILTERING
         """
         params = (user1,)
+        
+        logger.info("S2 - Entered create_or_get_conversation method")
+
         conversation = cassandra_client.execute(query, params)
         
+        logger.info("S! - Entered create_or_get_conversation method")
+        
+        
         for conv in conversation:
+            logger.info(f"Conversation: {conv}")
             if user2 in conv.get("list_of_users", []):
+                logger.info("User2 found in conversation")
                 return conv
+            
+        logger.info("S3 - Entered create_or_get_conversation method")
+            
 
         
         
@@ -321,14 +381,18 @@ class ConversationModel:
         conversation_id = uuid.uuid4()
         message_at = datetime.now()
         
+        logger.info("S4 - Entered create_or_get_conversation method")
+        
+        
         query = """
-            INSERT INTO conversations 
+            INSERT INTO user_conversations 
             (conversation_id, list_of_users, created_at, last_message_at)
             VALUES (%s, %s, %s, %s)
         """
         
         params = (conversation_id, [user1, user2], message_at, message_at)
         cassandra_client.execute(query, params)
+        
         
         return {
             "conversation_id": conversation_id,

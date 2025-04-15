@@ -9,7 +9,17 @@ from app.schemas.message import (
     PaginatedMessageResponse
 )
 
+
 import uuid
+import logging
+# Configure logger
+logger = logging.getLogger("message_routes")
+logger.setLevel(logging.INFO)
+handler = logging.StreamHandler()
+formatter = logging.Formatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s")
+handler.setFormatter(formatter)
+logger.addHandler(handler)
+
 
 router = APIRouter(prefix="/api/messages", tags=["Messages"])
 
@@ -17,7 +27,8 @@ router = APIRouter(prefix="/api/messages", tags=["Messages"])
 async def send_message(
     message: MessageCreate = Body(...),
     message_controller: MessageController = Depends()
-) -> MessageResponse:
+): # -> MessageResponse:
+    # return {"sux": 12}
     """
     Send a message from one user to another
     """
@@ -25,7 +36,6 @@ async def send_message(
 
 @router.get("/conversation/{conversation_id}", response_model=PaginatedMessageResponse)
 async def get_conversation_messages(
-    # conversation_id: int = Path(..., description="ID of the conversation"),
     conversation_id: uuid.UUID = Path(..., description="ID of the conversation"),
     page: int = Query(1, description="Page number"),
     limit: int = Query(20, description="Number of messages per page"),
@@ -34,6 +44,7 @@ async def get_conversation_messages(
     """
     Get all messages in a conversation with pagination
     """
+    logger.info("MESSAGEROUTE - CONVERSATION")
     return await message_controller.get_conversation_messages(
         conversation_id=conversation_id,
         page=page,

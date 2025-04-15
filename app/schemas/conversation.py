@@ -3,8 +3,10 @@ from typing import List, Optional
 from datetime import datetime
 from app.schemas.message import MessageResponse
 
+import uuid
+
 class ConversationResponse(BaseModel):
-    id: int = Field(..., description="Unique ID of the conversation")
+    id: uuid.UUID = Field(..., description="Unique ID of the conversation")
     user1_id: int = Field(..., description="ID of the first user")
     user2_id: int = Field(..., description="ID of the second user")
     last_message_at: datetime = Field(..., description="Timestamp of the last message")

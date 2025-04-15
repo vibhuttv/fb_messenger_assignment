@@ -66,21 +66,3 @@ CREATE TABLE IF NOT EXISTS messages_by_id (
 );
 ```
 
-## Table: messages_by_conversation
-Used to fetch all messages in a conversation ordered by most recent.
-
-- Partition Key: `conversation_id`
-- Clustering Columns: `message_timestamp DESC`, `message_id`
-- Supports: Retrieving all messages in a conversation and pagination.
-
-## Table: user_conversions
-Used to fetch user’s conversations ordered by recent activity.
-
-- Partition Key: `user_id`
-- Clustering Columns: `last_message_timestamp DESC`, `conversation_id`
-- Supports: Showing recent conversations per user.
-
-## Table: messages_by_id
-Used for looking up individual messages by ID (optional).
-
-- Primary Key: `message_id`

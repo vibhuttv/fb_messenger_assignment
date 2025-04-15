@@ -5,7 +5,7 @@ from app.schemas.conversation import ConversationResponse, PaginatedConversation
 from app.models.cassandra_models import ConversationModel
 
 import uuid
-from logging import logger
+# from logging import logger
 
 class ConversationController:
     """
